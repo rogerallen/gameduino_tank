@@ -10,6 +10,26 @@ rnd = random.randrange
 CELLS = (16,9)
 
 # ======================================================================
+class Tank:
+    def __init__(self, x, y, cell):
+        self.x = x
+        self.y = y
+        self.cell = cell
+    
+    def update(self, c):
+        # U: bdu D: bdd L: bdl R: bdr
+        self.x += c['bdr'] * 1 + c['bdl'] * -1
+        self.y += c['bdd'] * 1 + c['bdu'] * -1
+
+    def draw(self, gd):
+        gd.VertexFormat(0)
+        gd.Begin(eve.BITMAPS)
+        gd.SaveContext() # ???
+        gd.Cell(self.cell)
+        gd.Vertex2f(self.x, self.y)
+        gd.RestoreContext() # ???
+
+# ======================================================================
 class TankGame:
     def __init__(self, gd):
         gd.BitmapHandle(0)
@@ -30,34 +50,41 @@ class TankGame:
 
     def initialize(self):
         self.board = [[rnd(5) for y in range(CELLS[1])] for x in range(CELLS[0])]
+        self.tanks = [Tank(1280/4, 720/4, 2), Tank(1280/4, 3*720/4, 3)]
 
     def reset(self):
         self.off = 0
         #pass
 
     def update(self, cc):
-        pass
+        for i,t in enumerate(self.tanks):
+            t.update(cc[i])
 
     def draw(self):
         off = self.off
         gd = self.gd
         gd.ClearColorRGB(80, 0, 80)
         gd.Clear()
-        gd.VertexFormat(0)
-        gd.Begin(eve.BITMAPS)
-        gd.SaveContext()
-        for x in range(CELLS[0]):
-            for y in range(CELLS[1]):
-                gd.Cell(self.board[x][y])
-                # drawing at x > 1120 seems to fail.
-                #game.Point(off + x*80, off + y*80).draw(gd)
-                gd.Vertex2f(off + x*80, off + y*80)
-        gd.RestoreContext()
+        self.draw_board(gd)
+        for t in self.tanks:
+            t.draw(gd)
         #gd.Begin(eve.LINES)
         #gd.LineWidth(10)
         #gd.Vertex2f(off,off)
         #gd.Vertex2f(1280,off)
         gd.swap()
+
+    def draw_board(self, gd):
+        gd.VertexFormat(0)
+        gd.Begin(eve.BITMAPS)
+        gd.SaveContext() # ???
+        for x in range(CELLS[0]):
+            for y in range(CELLS[1]):
+                v = self.board[x][y]
+                if v < 2:
+                    gd.Cell(v)
+                    gd.Vertex2f(x*80, y*80)
+        gd.RestoreContext() # ???
 
     def play(self):
         while True: # replay game loop
