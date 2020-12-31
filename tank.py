@@ -1,137 +1,86 @@
 import sys
 import random
 import bteve as eve
-
 import game
 
-PADDLE_SIZE = 45
+rnd = random.randrange
 
-def draw_court(gd):
-    gd.ClearColorRGB(0, 10, 0)
-    gd.ColorRGB(252, 252, 252)
-    gd.Clear()
-    gd.LineWidth(10)
-    gd.PointSize(10)
-    gd.Begin(eve.LINES)
-    for y in (5, 720 - 5):
-        gd.Vertex2f(40, y)
-        gd.Vertex2f(1240, y)
-    gd.Begin(eve.POINTS)
-    for y in range(20, 710, 20):
-        gd.Vertex2f(640, y)
+# res = 1280 x 720
+# cells = 1280/80 x 720/80 = 16 x 9
+CELLS = (16,9)
 
-def sfx(gd, inst, midi = 0):
-    gd.cmd_regwrite(eve.REG_SOUND, inst + (midi << 8))
-    gd.cmd_regwrite(eve.REG_PLAY, 1)
-    gd.flush()
-
-class Ball:
+# ======================================================================
+class TankGame:
     def __init__(self, gd):
+        gd.BitmapHandle(0)
+        gd.cmd_loadimage(0, 0) # load to loc 0
+        # This is 80 x 400 and has 5 images (80x80)
+        fn = "fruit.png" 
+        with open(fn, "rb") as f:
+            gd.load(f)
+        gd.cmd_setbitmap(0, eve.ARGB4, 80, 80)
+
+        gd.SaveContext()
+        gd.cmd_romfont(31, 34)
+        gd.RestoreContext()
+
+        self.initialize()
         self.gd = gd
-        self.pos = game.Point(320, 360)
-        self.vel = game.Point(7, 8)
-        self.hide()
+        self.reset()
 
-    def hide(self):
-        self.servetimer = 60
+    def initialize(self):
+        self.board = [[rnd(5) for y in range(CELLS[1])] for x in range(CELLS[0])]
 
-    def move(self, py):
-        if self.servetimer != 0:
-            self.servetimer -= 1
-            if self.servetimer == 0:
-                sfx(self.gd, 0x18, 68)
-            return (0, 0)
-        n = self.pos + self.vel
+    def reset(self):
+        self.off = 0
+        #pass
 
-        edge_l = (self.vel.x < 0) and (30 < n.x < 45)
-        edge_r = (self.vel.x > 0) and (1225 < n.x < 1235)
-        # paddle draws rounded edges of radius 10, and also point is radius 10
-        # take off just a smidge so we aren't too generous
-        if (edge_l or edge_r) and abs(n.y - py[edge_r]) < (PADDLE_SIZE+18):
-            self.vel.x *= -1
-            self.vel.y += random.randrange(-1, 2)
-            sfx(self.gd, 0x10, 62)
-        if not (10 < n.y < 710):
-            self.vel.y *= -1
-            sfx(self.gd, 0x10, 63)
-            if n.y < 10:
-                n.y == 10
-            elif n.y > 710:
-                n.y == 710
-        self.pos = n
-        if not (0 < self.pos.x < 1280):
-            self.pos.x -= (30 * self.vel.x)
-            self.vel.x *= -1
-            self.vel.y = random.randrange(-7, 8)
-            self.hide()
-            sfx(self.gd, 0x18, 40)
-            # note vel.x has reversed above
-            if self.vel.x < 0:
-                return (1, 0)
-            else:
-                return (0, 1)
-        return (0, 0)
+    def update(self, cc):
+        pass
 
     def draw(self):
+        off = self.off
         gd = self.gd
-        gd.ColorRGB(252, 252, 252)
-        if self.servetimer == 0:
-            gd.PointSize(16)
-            gd.Begin(eve.POINTS)
-            self.pos.draw(gd)
-
-class Scores:
-    def __init__(self):
-        self.s = [0, 0]
-
-    def update(self, ch):
-        self.s[0] += ch[0]
-        self.s[1] += ch[1]
-
-    def draw(self, gd):
-        gd.ColorRGB(252, 252, 252)
-        for (x, s) in zip((640 - 100, 640 + 100), self.s):
-            gd.cmd_number(x, 80, 31, eve.OPT_CENTER, s)
-
-def pong(gd):
-    gd.cmd_romfont(31, 34)
-
-    ball = Ball(gd)
-    scores = Scores()
-
-    def control(c, y):
-        y -= (c["ry"] - 16)
-        return max(45, min(y, 675))
-    yy = [360, 360]
-    while 1:
-        gd.finish()
-        cc = gd.controllers()
-        if cc[0]['bh'] or cc[1]['bh']:
-            return
-        yy = [control(c, y) for (c, y) in zip(cc, yy)]
-        scores.update(ball.move(yy))
-
-        gd.VertexFormat(3)
-
-        draw_court(gd)
-
-        gd.LineWidth(20)
-        for x,y in [(40, yy[0]), (1240, yy[1])]:
-            if x == 40:
-                gd.ColorRGB(252, 252, 0)
-            else:
-                gd.ColorRGB(0, 252, 252)
-            gd.Begin(eve.LINES)
-            gd.Vertex2f(x, y - PADDLE_SIZE)
-            gd.Vertex2f(x, y + PADDLE_SIZE)
-        ball.draw()
-        scores.draw(gd)
+        gd.ClearColorRGB(80, 0, 80)
+        gd.Clear()
+        gd.VertexFormat(0)
+        gd.Begin(eve.BITMAPS)
+        gd.SaveContext()
+        for x in range(CELLS[0]):
+            for y in range(CELLS[1]):
+                gd.Cell(self.board[x][y])
+                # drawing at x > 1120 seems to fail.
+                #game.Point(off + x*80, off + y*80).draw(gd)
+                gd.Vertex2f(off + x*80, off + y*80)
+        gd.RestoreContext()
+        #gd.Begin(eve.LINES)
+        #gd.LineWidth(10)
+        #gd.Vertex2f(off,off)
+        #gd.Vertex2f(1280,off)
         gd.swap()
 
+    def play(self):
+        while True: # replay game loop
+            while True: # game loop
+                cc = self.gd.controllers()
+                # Start "restarts"
+                if cc[0]['b+']: 
+                    #print("DBG-start")
+                    break
+                # Home quits
+                if cc[0]['bh'] or cc[1]['bh']:  
+                    #print("DBG-home")
+                    return
+                self.update(cc)
+                self.draw()
+            self.initialize()
+            self.reset()
+
+# ======================================================================
 if sys.implementation.name == 'circuitpython':
     def run(gd):
-        pong(gd)
+        TankGame(gd).play()
 else:
     from spidriver import SPIDriver
     gd = eve.GameduinoSPIDriver(SPIDriver(sys.argv[1]))
-    pong(gd)
+    TankGame(gd).play()
