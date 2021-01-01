@@ -2,6 +2,7 @@ import sys
 import random
 import bteve as eve
 import game
+import math
 
 rnd = random.randrange
 
@@ -11,21 +12,35 @@ CELLS = (16,9)
 
 # ======================================================================
 class Tank:
-    def __init__(self, x, y, cell):
+    def __init__(self, x, y, cells):
         self.x = x
         self.y = y
-        self.cell = cell
+        self.turret_angle = 0
+        self.cell = cells[0]
+        self.turret_cell = cells[1]
     
     def update(self, c):
         # U: bdu D: bdd L: bdl R: bdr
         self.x += c['bdr'] * 1 + c['bdl'] * -1
         self.y += c['bdd'] * 1 + c['bdu'] * -1
+        # Right Pot: rx, ry (0-31)
+        dx, dy = c['rx'] - 16, c['ry'] - 16
+        self.turret_angle = (-90-math.degrees(math.atan2(dy, dx))) % 360
+        #print(self.turret_angle)
 
     def draw(self, gd):
         gd.VertexFormat(0)
         gd.Begin(eve.BITMAPS)
         gd.SaveContext() # ???
         gd.Cell(self.cell)
+        gd.Vertex2f(self.x, self.y)
+        gd.Cell(self.turret_cell)
+        # do some rotation around 40,40 midpoint
+        gd.cmd_loadidentity()
+        gd.cmd_translate(40,40)
+        gd.cmd_rotate(self.turret_angle)
+        gd.cmd_translate(-40,-40)
+        gd.cmd_setmatrix()
         gd.Vertex2f(self.x, self.y)
         gd.RestoreContext() # ???
 
@@ -50,7 +65,7 @@ class TankGame:
 
     def initialize(self):
         self.board = [[rnd(5) for y in range(CELLS[1])] for x in range(CELLS[0])]
-        self.tanks = [Tank(1280/4, 720/4, 2), Tank(1280/4, 3*720/4, 3)]
+        self.tanks = [Tank(1280/4, 720/4, [2,3]), Tank(1280/4, 3*720/4, [2,4])]
 
     def reset(self):
         self.off = 0
