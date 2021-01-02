@@ -8,7 +8,39 @@ rnd = random.randrange
 
 # res = 1280 x 720
 # cells = 1280/80 x 720/80 = 16 x 9
-CELLS = (16,9)
+# cells = 720/36 = 20
+CELLS = (28,20)
+CELL_SIZE = 36
+CELL_SIZE2 = CELL_SIZE/2
+
+BOARD_INIT_STR = (\
+    "............................" + # 0
+    "............................" + # 1
+    "............................" + # 2
+    "............................" + # 3
+    "............................" + # 4
+    "............................" + # 5
+    "............................" + # 6
+    "........@.........@........." + # 7
+    "......@@@@@.@.@@@@@@@@......" + # 8
+    ".....@@@@@@@.@@@@@@@@@@....." + # 9
+    ".....@@@@@@.@.@@@@@@@@@....." + # 10
+    "......@@@@.@@@.@@@@@@@......" + # 11
+    "........@.........@........." + # 12
+    "............................" + # 13
+    "............................" + # 14
+    "............................" + # 15
+    "............................" + # 16
+    "............................" + # 17
+    "............................" + # 18
+    "............................")  # 19
+
+def str2cell(x,y):
+    char = BOARD_INIT_STR[x + CELLS[0]*y]
+    if char == '.':
+        return 0
+    else:
+        return 1
 
 # ======================================================================
 class Tank:
@@ -25,7 +57,7 @@ class Tank:
         self.y += c['bdd'] * 1 + c['bdu'] * -1
         # Right Pot: rx, ry (0-31)
         dx, dy = c['rx'] - 16, c['ry'] - 16
-        self.turret_angle = (-90-math.degrees(math.atan2(dy, dx))) % 360
+        self.turret_angle = (-math.degrees(math.atan2(dy, dx))) % 360
         #print(self.turret_angle)
 
     def draw(self, gd):
@@ -37,9 +69,9 @@ class Tank:
         gd.Cell(self.turret_cell)
         # do some rotation around 40,40 midpoint
         gd.cmd_loadidentity()
-        gd.cmd_translate(40,40)
+        gd.cmd_translate(CELL_SIZE2,CELL_SIZE2)
         gd.cmd_rotate(self.turret_angle)
-        gd.cmd_translate(-40,-40)
+        gd.cmd_translate(-CELL_SIZE2,-CELL_SIZE2)
         gd.cmd_setmatrix()
         gd.Vertex2f(self.x, self.y)
         gd.RestoreContext() # ???
@@ -50,10 +82,10 @@ class TankGame:
         gd.BitmapHandle(0)
         gd.cmd_loadimage(0, 0) # load to loc 0
         # This is 80 x 400 and has 5 images (80x80)
-        fn = "fruit.png" 
+        fn = "tank.png" 
         with open(fn, "rb") as f:
             gd.load(f)
-        gd.cmd_setbitmap(0, eve.ARGB4, 80, 80)
+        gd.cmd_setbitmap(0, eve.ARGB4, CELL_SIZE, CELL_SIZE)
 
         gd.SaveContext()
         gd.cmd_romfont(31, 34)
@@ -64,8 +96,10 @@ class TankGame:
         self.reset()
 
     def initialize(self):
-        self.board = [[rnd(5) for y in range(CELLS[1])] for x in range(CELLS[0])]
-        self.tanks = [Tank(1280/4, 720/4, [2,3]), Tank(1280/4, 3*720/4, [2,4])]
+        self.board = [[str2cell(x,y) for y in range(CELLS[1])] for x in range(CELLS[0])]
+        self.tanks = [
+            Tank(1280/4,   720/4, [2,3]), 
+            Tank(1280/4, 3*720/4, [2,3])]
 
     def reset(self):
         self.off = 0
@@ -78,7 +112,7 @@ class TankGame:
     def draw(self):
         off = self.off
         gd = self.gd
-        gd.ClearColorRGB(80, 0, 80)
+        gd.ClearColorRGB(40, 40, 40)
         gd.Clear()
         self.draw_board(gd)
         for t in self.tanks:
@@ -98,7 +132,7 @@ class TankGame:
                 v = self.board[x][y]
                 if v < 2:
                     gd.Cell(v)
-                    gd.Vertex2f(x*80, y*80)
+                    gd.Vertex2f(x*CELL_SIZE, y*CELL_SIZE)
         gd.RestoreContext() # ???
 
     def play(self):
