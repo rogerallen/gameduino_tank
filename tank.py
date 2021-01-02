@@ -6,12 +6,11 @@ import math
 
 rnd = random.randrange
 
-# res = 1280 x 720
-# cells = 1280/80 x 720/80 = 16 x 9
-# cells = 720/36 = 20
-CELLS = (28,20)
+# screen resolution = 1280 x 720
 CELL_SIZE = 36
-CELL_SIZE2 = CELL_SIZE/2
+# cells = 720/36 = 20 high.  Eyeballed to find 28 wide.
+CELLS = (28,20)
+CELL_SIZE_DIV2 = CELL_SIZE/2
 
 BOARD_INIT_STR = (\
     "............................" + # 0
@@ -69,9 +68,9 @@ class Tank:
         gd.Cell(self.turret_cell)
         # do some rotation around 40,40 midpoint
         gd.cmd_loadidentity()
-        gd.cmd_translate(CELL_SIZE2,CELL_SIZE2)
+        gd.cmd_translate(CELL_SIZE_DIV2,CELL_SIZE_DIV2)
         gd.cmd_rotate(self.turret_angle)
-        gd.cmd_translate(-CELL_SIZE2,-CELL_SIZE2)
+        gd.cmd_translate(-CELL_SIZE_DIV2,-CELL_SIZE_DIV2)
         gd.cmd_setmatrix()
         gd.Vertex2f(self.x, self.y)
         gd.RestoreContext() # ???
@@ -98,8 +97,8 @@ class TankGame:
     def initialize(self):
         self.board = [[str2cell(x,y) for y in range(CELLS[1])] for x in range(CELLS[0])]
         self.tanks = [
-            Tank(1280/4,   720/4, [2,3]), 
-            Tank(1280/4, 3*720/4, [2,3])]
+            Tank(CELLS[0]*CELL_SIZE/2,   720/8, [2,3]), 
+            Tank(CELLS[0]*CELL_SIZE/2, 7*720/8, [2,3])]
 
     def reset(self):
         self.off = 0
