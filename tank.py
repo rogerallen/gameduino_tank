@@ -6,19 +6,27 @@ import math
 
 rnd = random.randrange
 
+# ======================================================================
 # screen resolution = 1280 x 720
-CELL_SIZE = 36
+SCREEN_WIDTH   = 1280
+SCREEN_HEIGHT  = 720
+CELL_SIZE      = 36
 # cells = 720/36 = 20 high.  Eyeballed to find 28 wide.
-CELLS = (28,20)
+CELLS          = (28,20)
 CELL_SIZE_DIV2 = CELL_SIZE/2
+CELL_SIZE_DIV4 = CELL_SIZE/4
+WINDOW_WIDTH   = CELLS[0]*CELL_SIZE
+WINDOW_HEIGHT  = CELLS[1]*CELL_SIZE
 
+# ======================================================================
+# initial map
 BOARD_INIT_STR = (\
     "............................" + # 0
     "............................" + # 1
     "............................" + # 2
-    "............................" + # 3
+    "......@....................." + # 3
     "............................" + # 4
-    "............................" + # 5
+    "........................@..." + # 5
     "............................" + # 6
     "........@.........@........." + # 7
     "......@@@@@.@.@@@@@@@@......" + # 8
@@ -27,19 +35,24 @@ BOARD_INIT_STR = (\
     "......@@@@.@@@.@@@@@@@......" + # 11
     "........@.........@........." + # 12
     "............................" + # 13
-    "............................" + # 14
+    "....@......................." + # 14
     "............................" + # 15
-    "............................" + # 16
+    ".......................@...." + # 16
     "............................" + # 17
     "............................" + # 18
     "............................")  # 19
 
+BOARD_OPEN   = 0
+BOARD_ROCK   = 1
+BOARD_TANK   = 2
+BOARD_TURRET = 3
+
 def str2cell(x,y):
     char = BOARD_INIT_STR[x + CELLS[0]*y]
-    if char == '.':
-        return 0
+    if char == '@':
+        return BOARD_ROCK
     else:
-        return 1
+        return BOARD_OPEN
 
 # ======================================================================
 class Tank:
@@ -53,15 +66,12 @@ class Tank:
         self.cell = cells[0]
         self.turret_cell = cells[1]
     
-    def update(self, c):
-        self.update_position(c)
+    def update(self, c, board):
+        self.update_position(c, board)
         self.update_turret(c)
 
-    def update_position(self, c):
-        # U: bdu D: bdd L: bdl R: bdr
-        #self.x += c['bdr'] * 1 + c['bdl'] * -1
-        #self.y += c['bdd'] * 1 + c['bdu'] * -1
-        # Left Pot: lx, ly (0-63)
+    def update_position(self, c, board):
+        # Left Thumbstick: lx, ly (0-63)
         dx, dy = c['lx'] - 32, c['ly'] - 32
         mag = math.sqrt(dx*dx+dy*dy) / 32
         if dx*dx > 0:
@@ -77,11 +87,31 @@ class Tank:
                 velocity = -mag * Tank.MAX_VELOCITY
             else:
                 velocity = mag * Tank.MAX_VELOCITY
-            self.x += math.cos(math.radians(self.angle)) * velocity
-            self.y += math.sin(math.radians(self.angle)) * velocity
+            self.collision_update(
+                math.cos(math.radians(self.angle)) * velocity,
+                math.sin(math.radians(self.angle)) * velocity,
+                board)
+
+    def collision_update(self, dx, dy, board):
+        "check for wall, rock collision before updating x,y"
+        new_x, new_y = self.x + dx, self.y + dy
+        # tank is not going to take up the whole cell, just 1/2 in the center
+        new_x0, new_y0 = new_x + CELL_SIZE_DIV4, new_y + CELL_SIZE_DIV4
+        new_x1, new_y1 = new_x0 + CELL_SIZE_DIV2, new_y0 + CELL_SIZE_DIV2
+        new_cell_i0, new_cell_j0 = int(new_x0/CELL_SIZE), int(new_y0/CELL_SIZE)
+        new_cell_i1, new_cell_j1 = int(new_x1/CELL_SIZE), int(new_y1/CELL_SIZE)
+        if ((0 < new_x0) and (new_x1 < WINDOW_WIDTH) and   # WALLS
+            (0 < new_y0) and (new_y1 < WINDOW_HEIGHT) and
+            # I think the above prevents out of bounds below...let's see.
+            (board[new_cell_i0][new_cell_j0] == BOARD_OPEN) and     # ROCKS
+            (board[new_cell_i0][new_cell_j1] == BOARD_OPEN) and 
+            (board[new_cell_i1][new_cell_j0] == BOARD_OPEN) and 
+            (board[new_cell_i1][new_cell_j1] == BOARD_OPEN)):
+            self.x = new_x
+            self.y = new_y
 
     def update_turret(self,c):
-        # Right Pot: rx, ry (0-31)
+        # Right Thumbstick: rx, ry (0-31)
         dx, dy = c['rx'] - 16, c['ry'] - 16
         if dx*dx > 0:
             turret_velocity = 0
@@ -133,8 +163,8 @@ class TankGame:
     def initialize(self):
         self.board = [[str2cell(x,y) for y in range(CELLS[1])] for x in range(CELLS[0])]
         self.tanks = [
-            Tank(CELLS[0]*CELL_SIZE/2,   720/8, [2,3]), 
-            Tank(CELLS[0]*CELL_SIZE/2, 7*720/8, [2,3])]
+            Tank(CELLS[0]*CELL_SIZE/2,   720/8, [BOARD_TANK, BOARD_TURRET]), 
+            Tank(CELLS[0]*CELL_SIZE/2, 7*720/8, [BOARD_TANK, BOARD_TURRET])]
 
     def reset(self):
         self.off = 0
@@ -142,7 +172,7 @@ class TankGame:
 
     def update(self, cc):
         for i,t in enumerate(self.tanks):
-            t.update(cc[i])
+            t.update(cc[i],self.board)
 
     def draw(self):
         off = self.off
