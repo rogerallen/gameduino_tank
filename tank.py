@@ -43,30 +43,66 @@ def str2cell(x,y):
 
 # ======================================================================
 class Tank:
+    MAX_VELOCITY=3.0
+    TURN_VELOCITY=5.0
     def __init__(self, x, y, cells):
         self.x = x
         self.y = y
+        self.angle = 0
         self.turret_angle = 0
         self.cell = cells[0]
         self.turret_cell = cells[1]
     
     def update(self, c):
+        self.update_position(c)
+        self.update_turret(c)
+
+    def update_position(self, c):
         # U: bdu D: bdd L: bdl R: bdr
-        self.x += c['bdr'] * 1 + c['bdl'] * -1
-        self.y += c['bdd'] * 1 + c['bdu'] * -1
+        #self.x += c['bdr'] * 1 + c['bdl'] * -1
+        #self.y += c['bdd'] * 1 + c['bdu'] * -1
+        # Left Pot: lx, ly (0-63)
+        dx, dy = c['lx'] - 32, c['ly'] - 32
+        mag = math.sqrt(dx*dx+dy*dy) / 32
+        if dx*dx > 0:
+            turn_velocity = 0
+            if dx < 0:
+                turn_velocity = -Tank.TURN_VELOCITY 
+            else: 
+                turn_velocity = Tank.TURN_VELOCITY
+            self.angle = (self.angle + turn_velocity) % 360
+        if dy*dy > 0:
+            velocity = 0
+            if dy < 0:
+                velocity = -mag * Tank.MAX_VELOCITY
+            else:
+                velocity = mag * Tank.MAX_VELOCITY
+            self.x += math.cos(math.radians(self.angle)) * velocity
+            self.y += math.sin(math.radians(self.angle)) * velocity
+
+    def update_turret(self,c):
         # Right Pot: rx, ry (0-31)
         dx, dy = c['rx'] - 16, c['ry'] - 16
-        self.turret_angle = (-math.degrees(math.atan2(dy, dx))) % 360
-        #print(self.turret_angle)
-
+        if dx*dx > 0:
+            turret_velocity = 0
+            if dx < 0:
+                turret_velocity = -Tank.TURN_VELOCITY 
+            else: 
+                turret_velocity = Tank.TURN_VELOCITY
+            self.turret_angle = (self.turret_angle + turret_velocity) % 360
+        
     def draw(self, gd):
         gd.VertexFormat(0)
         gd.Begin(eve.BITMAPS)
         gd.SaveContext() # ???
         gd.Cell(self.cell)
+        gd.cmd_loadidentity()
+        gd.cmd_translate(CELL_SIZE_DIV2,CELL_SIZE_DIV2)
+        gd.cmd_rotate(self.angle)
+        gd.cmd_translate(-CELL_SIZE_DIV2,-CELL_SIZE_DIV2)
+        gd.cmd_setmatrix()
         gd.Vertex2f(self.x, self.y)
         gd.Cell(self.turret_cell)
-        # do some rotation around 40,40 midpoint
         gd.cmd_loadidentity()
         gd.cmd_translate(CELL_SIZE_DIV2,CELL_SIZE_DIV2)
         gd.cmd_rotate(self.turret_angle)
