@@ -42,10 +42,12 @@ BOARD_INIT_STR = (\
     "............................" + # 18
     "............................")  # 19
 
-BOARD_OPEN   = 0
-BOARD_ROCK   = 1
-BOARD_TANK   = 2
-BOARD_TURRET = 3
+BOARD_OPEN    = 0
+BOARD_ROCK    = 1
+BOARD_TANK    = 2
+BOARD_TURRET  = 3
+BOARD_BULLET1 = 4
+BOARD_BULLET2 = 5
 
 def str2cell(x,y):
     char = BOARD_INIT_STR[x + CELLS[0]*y]
@@ -53,6 +55,76 @@ def str2cell(x,y):
         return BOARD_ROCK
     else:
         return BOARD_OPEN
+
+# ======================================================================
+class Bullet:
+    VELOCITY=10.0
+    def __init__(self):
+        self.x = -1
+        self.y = -1
+        self.angle = -1
+        self.cells = [BOARD_BULLET1, BOARD_BULLET2]
+        self.cell_index = 0
+        self.active = False        
+        
+    def fire(self, x, y, angle):
+        self.x = x
+        self.y = y
+        self.angle = angle
+        self.cell_index = 0
+        self.active = True
+
+    def update(self, board, otherTank):
+        if self.active:
+            #print("active: ",self.x, self.y)
+            r = math.radians(self.angle)
+            new_x, new_y = self.x + math.cos(r) * Bullet.VELOCITY, self.y + math.sin(r) * Bullet.VELOCITY
+            # not going to take up the whole cell, just 1/2 in the center
+            new_x0, new_y0 = new_x + CELL_SIZE_DIV4, new_y + CELL_SIZE_DIV4
+            new_x1, new_y1 = new_x0 + CELL_SIZE_DIV2, new_y0 + CELL_SIZE_DIV2
+            new_cell_i0, new_cell_j0 = int(new_x0/CELL_SIZE), int(new_y0/CELL_SIZE)
+            new_cell_i1, new_cell_j1 = int(new_x1/CELL_SIZE), int(new_y1/CELL_SIZE)
+            if ((0 < new_x0) and (new_x1 < WINDOW_WIDTH) and   # WALLS
+                (0 < new_y0) and (new_y1 < WINDOW_HEIGHT)):
+                # inside window
+                if ((board[new_cell_i0][new_cell_j0] == BOARD_OPEN) and # ROCKS
+                    (board[new_cell_i0][new_cell_j1] == BOARD_OPEN) and 
+                    (board[new_cell_i1][new_cell_j0] == BOARD_OPEN) and 
+                    (board[new_cell_i1][new_cell_j1] == BOARD_OPEN)):
+                    # not a rock
+                    other_x0 = otherTank.x + CELL_SIZE_DIV4
+                    other_x1 = otherTank.x + CELL_SIZE_DIV4 + CELL_SIZE_DIV2
+                    other_y0 = otherTank.y + CELL_SIZE_DIV4
+                    other_y1 = otherTank.y + CELL_SIZE_DIV4 + CELL_SIZE_DIV2
+                    if ((new_x0 <= other_x1) and (new_x1 >= other_x0) and
+                        (new_y0 <= other_y1) and (new_y1 >= other_y0)):
+                        # hit other tank FIXME
+                        self.active = False
+                    else:
+                        # hit nothing
+                        self.x = new_x
+                        self.y = new_y
+                else:
+                    # onscreen collision with Rock
+                    self.active = False # FIXME
+            else:
+                # offscreen
+                self.active = False
+
+    def draw(self, gd):
+        if self.active:
+            #gd.VertexFormat(0)
+            #gd.Begin(eve.BITMAPS)
+            #gd.SaveContext() # ???
+            gd.Cell(self.cells[self.cell_index])
+            #gd.cmd_loadidentity()
+            #gd.cmd_translate(CELL_SIZE_DIV2,CELL_SIZE_DIV2)
+            #gd.cmd_rotate(self.angle)
+            #gd.cmd_translate(-CELL_SIZE_DIV2,-CELL_SIZE_DIV2)
+            #gd.cmd_setmatrix()
+            gd.Vertex2f(self.x, self.y)
+            #gd.RestoreContext() # ???
+            self.cell_index = (self.cell_index+1) % len(self.cells)
 
 # ======================================================================
 class Tank:
@@ -65,10 +137,13 @@ class Tank:
         self.turret_angle = 0
         self.cell = cells[0]
         self.turret_cell = cells[1]
+        self.bullets = [Bullet(), Bullet(), Bullet()]
+        self.last_bzr = False
     
-    def update(self, c, board):
+    def update(self, c, board, otherTank):
         self.update_position(c, board)
         self.update_turret(c)
+        self.update_bullets(c, board, otherTank)
 
     def update_position(self, c, board):
         # Left Thumbstick: lx, ly (0-63)
@@ -121,6 +196,20 @@ class Tank:
                 turret_velocity = Tank.TURN_VELOCITY
             self.turret_angle = (self.turret_angle + turret_velocity) % 360
         
+    def update_bullets(self, c, board, otherTank):
+        # falling edge trigger, see if we can activate a bullet
+        fire = not self.last_bzr and c['bzr']
+        self.last_bzr = c['bzr']
+        for i in range(len(self.bullets)):
+            if fire and not self.bullets[i].active:
+                # activate a bullet
+                bullet_x = self.x + CELL_SIZE_DIV2 * math.cos(math.radians(self.turret_angle))
+                bullet_y = self.y + CELL_SIZE_DIV2 * math.sin(math.radians(self.turret_angle))
+                self.bullets[i].fire(bullet_x, bullet_y, self.turret_angle)
+                fire = False
+            else:
+                self.bullets[i].update(board, otherTank)
+
     def draw(self, gd):
         gd.VertexFormat(0)
         gd.Begin(eve.BITMAPS)
@@ -139,6 +228,8 @@ class Tank:
         gd.cmd_translate(-CELL_SIZE_DIV2,-CELL_SIZE_DIV2)
         gd.cmd_setmatrix()
         gd.Vertex2f(self.x, self.y)
+        for b in self.bullets:
+            b.draw(gd)
         gd.RestoreContext() # ???
 
 # ======================================================================
@@ -172,7 +263,7 @@ class TankGame:
 
     def update(self, cc):
         for i,t in enumerate(self.tanks):
-            t.update(cc[i],self.board)
+            t.update(cc[i], self.board, self.tanks[1-i])
 
     def draw(self):
         off = self.off
