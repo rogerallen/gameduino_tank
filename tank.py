@@ -44,10 +44,26 @@ BOARD_INIT_STR = (\
 
 BOARD_OPEN    = 0
 BOARD_ROCK    = 1
-BOARD_TANK    = 2
-BOARD_TURRET  = 3
-BOARD_BULLET1 = 4
-BOARD_BULLET2 = 5
+BOARD_ROCK_D1 = 2
+BOARD_ROCK_D2 = 3
+BOARD_ROCK_D3 = 4
+BOARD_DRAWABLES = BOARD_ROCK_D3
+BOARD_TANK    = 5
+BOARD_TURRET  = 6
+BOARD_BULLET1 = 7
+BOARD_BULLET2 = 8
+
+board2cell = {
+    BOARD_OPEN:    0,
+    BOARD_ROCK:    1,
+    BOARD_ROCK_D1: 1,
+    BOARD_ROCK_D2: 1,
+    BOARD_ROCK_D3: 1,
+    BOARD_TANK:    2,
+    BOARD_TURRET:  3,
+    BOARD_BULLET1: 4,
+    BOARD_BULLET2: 5
+    }
 
 def str2cell(x,y):
     char = BOARD_INIT_STR[x + CELLS[0]*y]
@@ -56,26 +72,36 @@ def str2cell(x,y):
     else:
         return BOARD_OPEN
 
+def sfx(gd, inst, midi = 0):
+    gd.cmd_regwrite(eve.REG_SOUND, inst + (midi << 8))
+    gd.cmd_regwrite(eve.REG_PLAY, 1)
+    gd.flush()
+
 # ======================================================================
 class Bullet:
     VELOCITY=10.0
-    def __init__(self):
+    def __init__(self, gd):
+        self.gd = gd
         self.x = -1
         self.y = -1
         self.angle = -1
+        self.rot = 0
         self.cells = [BOARD_BULLET1, BOARD_BULLET2]
         self.cell_index = 0
         self.active = False        
         
     def fire(self, x, y, angle):
+        sfx(self.gd, eve.NOTCH)
         self.x = x
         self.y = y
         self.angle = angle
+        self.rot = 0
         self.cell_index = 0
         self.active = True
 
     def update(self, board, otherTank):
         if self.active:
+            self.rot += 5
             #print("active: ",self.x, self.y)
             r = math.radians(self.angle)
             new_x, new_y = self.x + math.cos(r) * Bullet.VELOCITY, self.y + math.sin(r) * Bullet.VELOCITY
@@ -87,10 +113,19 @@ class Bullet:
             if ((0 < new_x0) and (new_x1 < WINDOW_WIDTH) and   # WALLS
                 (0 < new_y0) and (new_y1 < WINDOW_HEIGHT)):
                 # inside window
-                if ((board[new_cell_i0][new_cell_j0] == BOARD_OPEN) and # ROCKS
-                    (board[new_cell_i0][new_cell_j1] == BOARD_OPEN) and 
-                    (board[new_cell_i1][new_cell_j0] == BOARD_OPEN) and 
-                    (board[new_cell_i1][new_cell_j1] == BOARD_OPEN)):
+                if not board.open_at(new_cell_i0,new_cell_j0):
+                    self.active = False
+                    board.hit_rock(new_cell_i0,new_cell_j0)
+                elif not board.open_at(new_cell_i0,new_cell_j1):
+                    self.active = False
+                    board.hit_rock(new_cell_i0,new_cell_j1)
+                elif not board.open_at(new_cell_i1,new_cell_j0):
+                    self.active = False
+                    board.hit_rock(new_cell_i1,new_cell_j0)
+                elif not board.open_at(new_cell_i1,new_cell_j1):
+                    self.active = False
+                    board.hit_rock(new_cell_i1,new_cell_j1)
+                else:
                     # not a rock
                     other_x0 = otherTank.x + CELL_SIZE_DIV4
                     other_x1 = otherTank.x + CELL_SIZE_DIV4 + CELL_SIZE_DIV2
@@ -104,24 +139,23 @@ class Bullet:
                         # hit nothing
                         self.x = new_x
                         self.y = new_y
-                else:
-                    # onscreen collision with Rock
-                    self.active = False # FIXME
+                    
             else:
                 # offscreen
                 self.active = False
 
-    def draw(self, gd):
+    def draw(self):
+        gd = self.gd
         if self.active:
             #gd.VertexFormat(0)
             #gd.Begin(eve.BITMAPS)
             #gd.SaveContext() # ???
-            gd.Cell(self.cells[self.cell_index])
-            #gd.cmd_loadidentity()
-            #gd.cmd_translate(CELL_SIZE_DIV2,CELL_SIZE_DIV2)
-            #gd.cmd_rotate(self.angle)
-            #gd.cmd_translate(-CELL_SIZE_DIV2,-CELL_SIZE_DIV2)
-            #gd.cmd_setmatrix()
+            gd.Cell(board2cell[self.cells[self.cell_index]])
+            gd.cmd_loadidentity()
+            gd.cmd_translate(CELL_SIZE_DIV2,CELL_SIZE_DIV2)
+            gd.cmd_rotate(self.rot)
+            gd.cmd_translate(-CELL_SIZE_DIV2,-CELL_SIZE_DIV2)
+            gd.cmd_setmatrix()
             gd.Vertex2f(self.x, self.y)
             #gd.RestoreContext() # ???
             self.cell_index = (self.cell_index+1) % len(self.cells)
@@ -130,14 +164,15 @@ class Bullet:
 class Tank:
     MAX_VELOCITY=3.0
     TURN_VELOCITY=5.0
-    def __init__(self, x, y, cells):
+    def __init__(self, gd, x, y, cells):
+        self.gd = gd
         self.x = x
         self.y = y
         self.angle = 0
         self.turret_angle = 0
         self.cell = cells[0]
         self.turret_cell = cells[1]
-        self.bullets = [Bullet(), Bullet(), Bullet()]
+        self.bullets = [Bullet(gd), Bullet(gd), Bullet(gd)]
         self.last_bzr = False
     
     def update(self, c, board, otherTank):
@@ -210,7 +245,8 @@ class Tank:
             else:
                 self.bullets[i].update(board, otherTank)
 
-    def draw(self, gd):
+    def draw(self):
+        gd = self.gd
         gd.VertexFormat(0)
         gd.Begin(eve.BITMAPS)
         gd.SaveContext() # ???
@@ -229,12 +265,13 @@ class Tank:
         gd.cmd_setmatrix()
         gd.Vertex2f(self.x, self.y)
         for b in self.bullets:
-            b.draw(gd)
+            b.draw()
         gd.RestoreContext() # ???
 
 # ======================================================================
 class TankGame:
     def __init__(self, gd):
+        self.gd = gd
         gd.BitmapHandle(0)
         gd.cmd_loadimage(0, 0) # load to loc 0
         # This is 80 x 400 and has 5 images (80x80)
@@ -254,8 +291,8 @@ class TankGame:
     def initialize(self):
         self.board = [[str2cell(x,y) for y in range(CELLS[1])] for x in range(CELLS[0])]
         self.tanks = [
-            Tank(CELLS[0]*CELL_SIZE/2,   720/8, [BOARD_TANK, BOARD_TURRET]), 
-            Tank(CELLS[0]*CELL_SIZE/2, 7*720/8, [BOARD_TANK, BOARD_TURRET])]
+            Tank(self.gd, CELLS[0]*CELL_SIZE/2,   720/8, [board2cell[BOARD_TANK], board2cell[BOARD_TURRET]]), 
+            Tank(self.gd, CELLS[0]*CELL_SIZE/2, 7*720/8, [board2cell[BOARD_TANK], board2cell[BOARD_TURRET]])]
 
     def reset(self):
         self.off = 0
@@ -263,32 +300,39 @@ class TankGame:
 
     def update(self, cc):
         for i,t in enumerate(self.tanks):
-            t.update(cc[i], self.board, self.tanks[1-i])
+            t.update(cc[i], self, self.tanks[1-i])
 
     def draw(self):
         off = self.off
         gd = self.gd
         gd.ClearColorRGB(40, 40, 40)
         gd.Clear()
-        self.draw_board(gd)
+        self.draw_board()
         for t in self.tanks:
-            t.draw(gd)
+            t.draw()
         #gd.Begin(eve.LINES)
         #gd.LineWidth(10)
         #gd.Vertex2f(off,off)
         #gd.Vertex2f(1280,off)
         gd.swap()
 
-    def draw_board(self, gd):
+    def draw_board(self):
+        gd = self.gd
         gd.VertexFormat(0)
         gd.Begin(eve.BITMAPS)
         gd.SaveContext() # ???
         for x in range(CELLS[0]):
             for y in range(CELLS[1]):
                 v = self.board[x][y]
-                if v < 2:
-                    gd.Cell(v)
+                if v <= BOARD_DRAWABLES:
+                    gd.Cell(board2cell[v])
+                    if v - BOARD_ROCK > 0:
+                        gd.cmd_translate(0,(v-BOARD_ROCK)*CELL_SIZE_DIV4)
+                        gd.cmd_setmatrix()
                     gd.Vertex2f(x*CELL_SIZE, y*CELL_SIZE)
+                    if v - BOARD_ROCK > 0:
+                        gd.cmd_translate(0,-(v-BOARD_ROCK)*CELL_SIZE_DIV4)
+                        gd.cmd_setmatrix()
         gd.RestoreContext() # ???
 
     def play(self):
@@ -307,7 +351,17 @@ class TankGame:
                 self.draw()
             self.initialize()
             self.reset()
+    
+    def open_at(self, x, y):
+        return self.board[x][y] == BOARD_OPEN
 
+    def hit_rock(self, x, y):
+        v = self.board[x][y]
+        v += 1
+        if v > BOARD_ROCK_D3:
+            v = BOARD_OPEN
+        self.board[x][y] = v
+        
 # ======================================================================
 if sys.implementation.name == 'circuitpython':
     def run(gd):
