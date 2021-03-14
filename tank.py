@@ -6,6 +6,12 @@ import math
 
 rnd = random.randrange
 
+# TODO:
+# x rocks take damage
+# x loading screen mode
+# o tank scores & hit display
+# o tanks take damage
+
 # ======================================================================
 # screen resolution = 1280 x 720
 SCREEN_WIDTH   = 1280
@@ -17,6 +23,9 @@ CELL_SIZE_DIV2 = CELL_SIZE/2
 CELL_SIZE_DIV4 = CELL_SIZE/4
 WINDOW_WIDTH   = CELLS[0]*CELL_SIZE
 WINDOW_HEIGHT  = CELLS[1]*CELL_SIZE
+
+GAME_IDLE = 1
+GAME_RUNNING = 2
 
 # ======================================================================
 # initial map
@@ -213,10 +222,10 @@ class Tank:
         if ((0 < new_x0) and (new_x1 < WINDOW_WIDTH) and   # WALLS
             (0 < new_y0) and (new_y1 < WINDOW_HEIGHT) and
             # I think the above prevents out of bounds below...let's see.
-            (board[new_cell_i0][new_cell_j0] == BOARD_OPEN) and     # ROCKS
-            (board[new_cell_i0][new_cell_j1] == BOARD_OPEN) and 
-            (board[new_cell_i1][new_cell_j0] == BOARD_OPEN) and 
-            (board[new_cell_i1][new_cell_j1] == BOARD_OPEN)):
+            board.open_at(new_cell_i0,new_cell_j0) and
+            board.open_at(new_cell_i0,new_cell_j1) and 
+            board.open_at(new_cell_i1,new_cell_j0) and
+            board.open_at(new_cell_i1,new_cell_j1)):
             self.x = new_x
             self.y = new_y
 
@@ -289,6 +298,7 @@ class TankGame:
         self.reset()
 
     def initialize(self):
+        self.mode = GAME_IDLE
         self.board = [[str2cell(x,y) for y in range(CELLS[1])] for x in range(CELLS[0])]
         self.tanks = [
             Tank(self.gd, CELLS[0]*CELL_SIZE/2,   720/8, [board2cell[BOARD_TANK], board2cell[BOARD_TURRET]]), 
@@ -299,23 +309,38 @@ class TankGame:
         #pass
 
     def update(self, cc):
-        for i,t in enumerate(self.tanks):
-            t.update(cc[i], self, self.tanks[1-i])
+        if self.mode == GAME_RUNNING:
+            for i,t in enumerate(self.tanks):
+                t.update(cc[i], self, self.tanks[1-i])
+        else:
+            if cc[0]['bb'] or cc[1]['bb']:
+                self.mode = GAME_RUNNING
 
     def draw(self):
         off = self.off
         gd = self.gd
         gd.ClearColorRGB(40, 40, 40)
         gd.Clear()
-        self.draw_board()
-        for t in self.tanks:
-            t.draw()
-        #gd.Begin(eve.LINES)
-        #gd.LineWidth(10)
-        #gd.Vertex2f(off,off)
-        #gd.Vertex2f(1280,off)
+        if self.mode == GAME_RUNNING:
+            self.draw_board()
+            for t in self.tanks:
+                t.draw()
+        else:
+            self.draw_intro()
         gd.swap()
 
+    def draw_intro(self):
+        gd = self.gd
+        self.draw_board()
+        gd.cmd_romfont(22, 30)
+        gd.cmd_romfont(31, 31)
+        gd.ColorRGB(0xd0,0xd0,0x00)
+        lh = 32
+        gd.cmd_text(int(WINDOW_WIDTH/2), int((1/3)*WINDOW_HEIGHT), 31, eve.OPT_CENTER, "Two Player Tank")
+        gd.cmd_text(int(WINDOW_WIDTH/2), int((2/3)*WINDOW_HEIGHT), 31, eve.OPT_CENTER, "Press B to start.")
+        gd.cmd_text(int(WINDOW_WIDTH/2), int((2/3)*WINDOW_HEIGHT)+2*lh, 30, eve.OPT_CENTER, "Thumbsticks move tank & turret")
+        gd.cmd_text(int(WINDOW_WIDTH/2), int((2/3)*WINDOW_HEIGHT)+3*lh, 30, eve.OPT_CENTER, "Right trigger fires bullets.")
+    
     def draw_board(self):
         gd = self.gd
         gd.VertexFormat(0)
