@@ -9,7 +9,7 @@ rnd = random.randrange
 # TODO:
 # x rocks take damage
 # x loading screen mode
-# o tank scores & hit display
+# x tank scores & hit display
 # o tanks take damage
 
 # ======================================================================
@@ -23,6 +23,8 @@ CELL_SIZE_DIV2 = CELL_SIZE/2
 CELL_SIZE_DIV4 = CELL_SIZE/4
 WINDOW_WIDTH   = CELLS[0]*CELL_SIZE
 WINDOW_HEIGHT  = CELLS[1]*CELL_SIZE
+STATUS_WIDTH   = SCREEN_WIDTH - WINDOW_WIDTH
+STATUS_WIDTH2  = STATUS_WIDTH/2
 
 GAME_IDLE = 1
 GAME_RUNNING = 2
@@ -171,8 +173,9 @@ class Bullet:
 
 # ======================================================================
 class Tank:
-    MAX_VELOCITY=3.0
-    TURN_VELOCITY=5.0
+    MAX_VELOCITY  = 3.0
+    TURN_VELOCITY = 5.0
+    MAX_DAMAGE    = 4
     def __init__(self, gd, x, y, cells):
         self.gd = gd
         self.x = x
@@ -183,6 +186,7 @@ class Tank:
         self.turret_cell = cells[1]
         self.bullets = [Bullet(gd), Bullet(gd), Bullet(gd)]
         self.last_bzr = False
+        self.damage = 0
     
     def update(self, c, board, otherTank):
         self.update_position(c, board)
@@ -256,6 +260,7 @@ class Tank:
 
     def draw(self):
         gd = self.gd
+        gd.ColorRGB(0xff,0xff,0xff)
         gd.VertexFormat(0)
         gd.Begin(eve.BITMAPS)
         gd.SaveContext() # ???
@@ -277,6 +282,9 @@ class Tank:
             b.draw()
         gd.RestoreContext() # ???
 
+    def score(self):
+        return self.MAX_DAMAGE - self.damage
+
 # ======================================================================
 class TankGame:
     def __init__(self, gd):
@@ -290,7 +298,9 @@ class TankGame:
         gd.cmd_setbitmap(0, eve.ARGB4, CELL_SIZE, CELL_SIZE)
 
         gd.SaveContext()
-        gd.cmd_romfont(31, 34)
+        gd.cmd_romfont(22, 30)
+        gd.cmd_romfont(31, 31)
+        gd.cmd_romfont(24, 29)
         gd.RestoreContext()
 
         self.initialize()
@@ -321,8 +331,9 @@ class TankGame:
         gd = self.gd
         gd.ClearColorRGB(40, 40, 40)
         gd.Clear()
+        self.draw_board()
+        self.draw_score()
         if self.mode == GAME_RUNNING:
-            self.draw_board()
             for t in self.tanks:
                 t.draw()
         else:
@@ -331,9 +342,6 @@ class TankGame:
 
     def draw_intro(self):
         gd = self.gd
-        self.draw_board()
-        gd.cmd_romfont(22, 30)
-        gd.cmd_romfont(31, 31)
         gd.ColorRGB(0xd0,0xd0,0x00)
         lh = 32
         gd.cmd_text(int(WINDOW_WIDTH/2), int((1/3)*WINDOW_HEIGHT), 31, eve.OPT_CENTER, "Two Player Tank")
@@ -341,6 +349,20 @@ class TankGame:
         gd.cmd_text(int(WINDOW_WIDTH/2), int((2/3)*WINDOW_HEIGHT)+2*lh, 30, eve.OPT_CENTER, "Thumbsticks move tank & turret")
         gd.cmd_text(int(WINDOW_WIDTH/2), int((2/3)*WINDOW_HEIGHT)+3*lh, 30, eve.OPT_CENTER, "Right trigger fires bullets.")
     
+    def draw_score(self):
+        gd = self.gd
+        gd.ColorRGB(0xf0,0xf0,0xf0)
+        lh = 32
+        gd.cmd_text(WINDOW_WIDTH + int(STATUS_WIDTH2), int((1/3)*WINDOW_HEIGHT), 29, eve.OPT_CENTER, "Player 1")
+        score = "X " * self.tanks[0].score()
+        gd.ColorRGB(0xf0,0x00,0x00)
+        gd.cmd_text(WINDOW_WIDTH + int(STATUS_WIDTH2), int((1/3)*WINDOW_HEIGHT) + lh, 29, eve.OPT_CENTER, score)
+        gd.ColorRGB(0xf0,0xf0,0xf0)
+        gd.cmd_text(WINDOW_WIDTH + int(STATUS_WIDTH2), int((2/3)*WINDOW_HEIGHT), 29, eve.OPT_CENTER, "Player 2")
+        score = "X " * self.tanks[1].score()
+        gd.ColorRGB(0xf0,0x00,0x00)
+        gd.cmd_text(WINDOW_WIDTH + int(STATUS_WIDTH2), int((2/3)*WINDOW_HEIGHT) + lh, 29, eve.OPT_CENTER, score)
+
     def draw_board(self):
         gd = self.gd
         gd.VertexFormat(0)
