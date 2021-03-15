@@ -6,12 +6,6 @@ import math
 
 rnd = random.randrange
 
-# TODO:
-# x rocks take damage
-# x loading screen mode
-# x tank scores & hit display
-# o tanks take damage
-
 # ======================================================================
 # screen resolution = 1280 x 720
 SCREEN_WIDTH   = 1280
@@ -40,10 +34,10 @@ BOARD_INIT_STR = (\
     "........................@..." + # 5
     "............................" + # 6
     "........@.........@........." + # 7
-    "......@@@@@.@.@@@@@@@@......" + # 8
-    ".....@@@@@@@.@@@@@@@@@@....." + # 9
-    ".....@@@@@@.@.@@@@@@@@@....." + # 10
-    "......@@@@.@@@.@@@@@@@......" + # 11
+    "......@@@@@.@..@@@@@@@......" + # 8
+    ".....@@@@@@@...@@@@@@@@....." + # 9
+    ".....@@@@@@.@..@@@@@@@@....." + # 10
+    "......@@@@.@@..@@@@@@@......" + # 11
     "........@.........@........." + # 12
     "............................" + # 13
     "....@......................." + # 14
@@ -144,7 +138,7 @@ class Bullet:
                     other_y1 = otherTank.y + CELL_SIZE_DIV4 + CELL_SIZE_DIV2
                     if ((new_x0 <= other_x1) and (new_x1 >= other_x0) and
                         (new_y0 <= other_y1) and (new_y1 >= other_y0)):
-                        # hit other tank FIXME
+                        otherTank.hit()
                         self.active = False
                     else:
                         # hit nothing
@@ -187,6 +181,8 @@ class Tank:
         self.bullets = [Bullet(gd), Bullet(gd), Bullet(gd)]
         self.last_bzr = False
         self.damage = 0
+        self.active = True
+        self.win = False
     
     def update(self, c, board, otherTank):
         self.update_position(c, board)
@@ -259,6 +255,8 @@ class Tank:
                 self.bullets[i].update(board, otherTank)
 
     def draw(self):
+        if not self.active:
+            return
         gd = self.gd
         gd.ColorRGB(0xff,0xff,0xff)
         gd.VertexFormat(0)
@@ -282,13 +280,25 @@ class Tank:
             b.draw()
         gd.RestoreContext() # ???
 
+    # return negative score if you win
     def score(self):
+        if self.win:
+            return -1 
         return self.MAX_DAMAGE - self.damage
+
+    def hit(self):
+        self.damage += 1
+        if self.damage >= self.MAX_DAMAGE:
+            self.active = False
+
+    def winner(self):
+        self.win = True
 
 # ======================================================================
 class TankGame:
     def __init__(self, gd):
         self.gd = gd
+        self.mode = GAME_IDLE
         gd.BitmapHandle(0)
         gd.cmd_loadimage(0, 0) # load to loc 0
         # This is 80 x 400 and has 5 images (80x80)
@@ -308,7 +318,6 @@ class TankGame:
         self.reset()
 
     def initialize(self):
-        self.mode = GAME_IDLE
         self.board = [[str2cell(x,y) for y in range(CELLS[1])] for x in range(CELLS[0])]
         self.tanks = [
             Tank(self.gd, CELLS[0]*CELL_SIZE/2,   720/8, [board2cell[BOARD_TANK], board2cell[BOARD_TURRET]]), 
@@ -322,9 +331,13 @@ class TankGame:
         if self.mode == GAME_RUNNING:
             for i,t in enumerate(self.tanks):
                 t.update(cc[i], self, self.tanks[1-i])
+                if t.active == False:
+                    self.tanks[1-i].winner()
+                    self.mode = GAME_IDLE
         else:
             if cc[0]['bb'] or cc[1]['bb']:
                 self.mode = GAME_RUNNING
+                self.initialize()
 
     def draw(self):
         off = self.off
@@ -354,13 +367,21 @@ class TankGame:
         gd.ColorRGB(0xf0,0xf0,0xf0)
         lh = 32
         gd.cmd_text(WINDOW_WIDTH + int(STATUS_WIDTH2), int((1/3)*WINDOW_HEIGHT), 29, eve.OPT_CENTER, "Player 1")
-        score = "X " * self.tanks[0].score()
-        gd.ColorRGB(0xf0,0x00,0x00)
+        if self.tanks[0].score() < 0:
+            score = "WINNER"
+            gd.ColorRGB(0x00,0xf0,0x00)
+        else:
+            score = "X " * self.tanks[0].score()
+            gd.ColorRGB(0xf0,0x00,0x00)
         gd.cmd_text(WINDOW_WIDTH + int(STATUS_WIDTH2), int((1/3)*WINDOW_HEIGHT) + lh, 29, eve.OPT_CENTER, score)
         gd.ColorRGB(0xf0,0xf0,0xf0)
         gd.cmd_text(WINDOW_WIDTH + int(STATUS_WIDTH2), int((2/3)*WINDOW_HEIGHT), 29, eve.OPT_CENTER, "Player 2")
-        score = "X " * self.tanks[1].score()
-        gd.ColorRGB(0xf0,0x00,0x00)
+        if self.tanks[1].score() < 0:
+            score = "WINNER"
+            gd.ColorRGB(0x00,0xf0,0x00)
+        else:
+            score = "X " * self.tanks[1].score()
+            gd.ColorRGB(0xf0,0x00,0x00)
         gd.cmd_text(WINDOW_WIDTH + int(STATUS_WIDTH2), int((2/3)*WINDOW_HEIGHT) + lh, 29, eve.OPT_CENTER, score)
 
     def draw_board(self):
