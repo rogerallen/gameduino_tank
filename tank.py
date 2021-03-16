@@ -393,12 +393,17 @@ class TankGame:
             for y in range(CELLS[1]):
                 v = self.board[x][y]
                 if v <= BOARD_DRAWABLES:
+                    vv = v - BOARD_ROCK
+                    if vv >= 0:
+                        # draw background cell under mountain
+                        gd.Cell(board2cell[BOARD_OPEN])
+                        gd.Vertex2f(x*CELL_SIZE, y*CELL_SIZE)
                     gd.Cell(board2cell[v])
-                    if v - BOARD_ROCK > 0:
+                    if vv > 0:
                         gd.cmd_translate(0,(v-BOARD_ROCK)*CELL_SIZE_DIV4)
                         gd.cmd_setmatrix()
                     gd.Vertex2f(x*CELL_SIZE, y*CELL_SIZE)
-                    if v - BOARD_ROCK > 0:
+                    if vv > 0:
                         gd.cmd_translate(0,-(v-BOARD_ROCK)*CELL_SIZE_DIV4)
                         gd.cmd_setmatrix()
         gd.RestoreContext() # ???
