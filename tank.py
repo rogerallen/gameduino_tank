@@ -287,11 +287,13 @@ class Tank:
         return self.MAX_DAMAGE - self.damage
 
     def hit(self):
+        sfx(self.gd, eve.COWBELL)
         self.damage += 1
         if self.damage >= self.MAX_DAMAGE:
             self.active = False
 
     def winner(self):
+        sfx(self.gd, eve.CHIMES)
         self.win = True
 
 # ======================================================================
@@ -429,6 +431,7 @@ class TankGame:
         return self.board[x][y] == BOARD_OPEN
 
     def hit_rock(self, x, y):
+        sfx(self.gd, eve.KICKDRUM)
         v = self.board[x][y]
         v += 1
         if v > BOARD_ROCK_D3:
